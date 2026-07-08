@@ -1,0 +1,176 @@
+#--------设备信息描述-------------------------
+#安装位置： 墙壁
+#设备样式：86盒面板主控  
+#主要功能：3开，6按键，6指示灯固件, web:admin  "12",  hass显示：上3健，上3指示灯，下三继电器
+#接入方式：api
+#设备ip：  自动获取
+#设备接口：
+#设备接口：
+<<: !include config.yaml
+packages:
+  configmqtt: !include configmqtt.yaml
+  deviceinfo: !include  deviceinfo.yaml
+  rgb: !include  rgb.yaml
+  ir: !include  ir.yaml
+  hlw8012: !include  hlw8012.yaml
+  sound: !include  sound.yaml
+#0,2,4,5,12,15最好不用
+#34，35，36，39没有内部拉高
+#spi flash 6，7，8，9，10，11 不能使用
+#21，22为硬件i2c
+#触控4，0，2，12，13，14，15，27，33，32
+#1，2，3，4，0，5
+substitutions:
+  version_date_1 : !secret version_date_
+  
+  key_1:  GPIO26  #外部拉高
+  key_2:  GPIO27  #外部拉高
+  key_3:  GPIO18  #外部拉高
+  key_4:  GPIO0  #外部拉高
+  key_5:  GPIO17  #外部拉高
+  key_6:  GPIO25  #外部拉高
+  relay_s: 0.05s
+
+  light_pin_1: GPIO32
+
+
+  relay_pin_3_1: GPIO23
+  relay_pin_3_2: GPIO22
+
+  relay_pin_2_1: GPIO16
+  relay_pin_2_2: GPIO21
+
+  relay_pin_1_1: GPIO13
+  relay_pin_1_2: GPIO19
+
+  relay_state_1: GPIO34
+  relay_state_2: GPIO39
+  relay_state_3: GPIO36
+
+
+  config_version: 'esp32-solo_ir_w02_hlw8012_${version_date_1}' #安装位置：GPIO   如：卧室：L:1/2 DS:2
+  device_name: tcl_ir   #esp+按键+继电器（插座Socket+设备rtu）
+
+esphome:
+  name: $device_name
+  name_add_mac_suffix: yes #允许用户编译单个二进制文件来闪存许多相同的设备，并且它们都将具有唯一的名称/主机名
+  on_boot: 
+
+    - priority: 300
+      then:
+        - lambda: |-
+              id(mqtt_client).set_broker_address(id(g_address));
+              id(mqtt_client).set_broker_port(id(g_port));
+              id(mqtt_client).set_username(id(g_username));
+              id(mqtt_client).set_password(id(g_password));
+              id(mqtt_client).set_discovery_info(id(g_prefix).c_str(), mqtt::MQTT_MAC_ADDRESS_UNIQUE_ID_GENERATOR, mqtt::MQTT_DEVICE_NAME_OBJECT_ID_GENERATOR, true, true);
+              //id(mqtt_client).set_topic_prefix(App.get_name());
+
+              id(mqtt_client).set_birth_message(mqtt::MQTTMessage{
+                  .topic = App.get_name() + "/" + "status",
+                  .payload = "online",
+                  .qos = 1,
+                  .retain = true,
+              });
+              id(mqtt_client).set_last_will(mqtt::MQTTMessage{
+                  .topic = App.get_name() + "/" + "status",
+                  .payload = "offline",
+                  .qos = 1,
+                  .retain = true,
+              });
+              id(mqtt_client).set_log_message_template(mqtt::MQTTMessage{
+                  .topic = App.get_name() + "/" + "debug",
+                  .payload = "offline",
+                  .qos = 1,
+                  .retain = true,
+              });
+
+
+
+#    - priority: -100
+#      then:
+#        - lambda: |-
+#            id(mqtt_client).subscribe(App.get_name() + "/ir_send", [=](const std::string &topic, const std::string &payload) {
+#              id(txv) = {};
+#              
+#              // 将 DynamicJsonDocument 改为 JsonDocument
+#              JsonDocument json_document;  // 直接使用 JsonDocument
+#              deserializeJson(json_document, payload);
+#              JsonArray root = json_document.as<JsonArray>();
+#              
+#              int s = -1;
+#              for(auto value : root) {
+#                s *= -1;
+#                id(txv).push_back(value.as<int>() * s);
+#              }
+#              
+#              // 发送 IR 信号的代码...
+#            });
+
+
+    - priority: -100
+      then:
+        - lambda: |-
+            id(mqtt_client).subscribe(App.get_name() + "/ir_send", [=](const std::string &topic, const std::string &payload) {
+            id(txv)={};
+            DynamicJsonDocument json_document(JSON_ARRAY_SIZE(payload.size() / 5));
+            deserializeJson(json_document, payload);
+            JsonArray root = json_document.as<JsonArray>();
+            int s = -1;
+            for(auto value : root) {
+                s *= -1;
+                id(txv).push_back(value.as<int>() * s);
+            }
+            id(irsend).press();
+            });
+binary_sensor:
+  - platform: gpio
+    pin:
+      number: GPIO4
+      inverted: true
+      mode:
+        input: true
+        pullup: true
+    name: "GPIO4"
+    device_class: window
+
+
+interval:
+  - interval: 5000ms
+    then:
+      - lambda: |-
+          static int last_state = 0;  // 0:正常, 1:WiFi断开, 2:MQTT断开
+          
+          // 修正：使用 WiFi.is_connected() 而不是 WiFi
+
+          bool wifi_ok = id(my_wifi).is_connected();
+          //bool wifi_ok = wifi->is_connected();
+          bool mqtt_ok = id(mqtt_client).is_connected();
+          
+          int current_state = 0;
+          if (!wifi_ok) current_state = 1;
+          else if (!mqtt_ok) current_state = 2;
+          
+          if (current_state != last_state) {
+            last_state = current_state;
+            
+            if (current_state == 0) {
+              // 正常状态，关闭灯光
+              id(light1).turn_off().perform();
+              ESP_LOGD("status", "All connected, turning off light");
+            } 
+            else if (current_state == 1) {
+              // WiFi 断开
+              auto call = id(light1).turn_on();
+              call.set_effect("Strobe_Effect1");
+              call.perform();
+              ESP_LOGW("status", "WiFi disconnected! Showing effect");
+            } 
+            else if (current_state == 2) {
+              // MQTT 断开
+              auto call = id(light1).turn_on();
+              call.set_effect("Strobe_Effect2");
+              call.perform();
+              ESP_LOGW("status", "MQTT disconnected! Showing effect");
+            }
+          }

@@ -1,0 +1,33 @@
+
+      
+text_sensor:
+  - platform: template #配置文件版本
+    name: "Config_Version"
+    update_interval: 1h
+    lambda: |-
+      return {"${config_version}"};
+
+  
+  - platform: wifi_info
+    ip_address:
+      name: 'IP'
+    mac_address:
+      name: 'MAC'
+
+
+
+
+
+sensor:
+  - platform: internal_temperature
+    id: cpu_temprature
+    name: cpu_temprature
+    unit_of_measurement: °C
+    device_class: temperature
+    filters:
+      - median:
+          window_size: 3
+          send_every: 3
+  - platform: wifi_signal
+    name: "RSSI"
+    update_interval: 60s

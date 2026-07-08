@@ -1,0 +1,198 @@
+
+
+substitutions:
+  pin_uart_su03_tx:  GPIO17  #外部拉高
+  pin_uart_su03_rx:  GPIO16  #外部拉高
+  pin_25:  GPIO25  #外部拉高
+  pin_14:  GPIO14  #外部拉高
+ 
+
+
+# Example configuration entry
+switch:
+  - platform: gpio
+    pin: $pin_25
+    name: "sound_enable"
+    inverted: true
+    restore_mode: RESTORE_DEFAULT_ON
+#  - platform: gpio
+#    pin: $pin_14
+#    name: "s2"
+
+text_sensor:
+  - platform: template
+    name: "sound_command"
+    id: "sound_command"
+    lambda: |-
+      return {"none"};
+    update_interval: 1h
+
+select:
+  - id: change_baud_rate
+    name: Baud rate
+    platform: template
+    options:
+      - "2400"
+      - "9600"
+      - "38400"
+      - "57600"
+      - "115200"
+      - "256000"
+      - "512000"
+      - "921600"
+    initial_option: "115200"
+    optimistic: true
+    restore_value: True
+    internal: false
+    entity_category: config
+    icon: mdi:swap-horizontal
+    set_action:
+      - lambda: |-
+          id(my_uart).flush();
+          uint32_t new_baud_rate = stoi(x);
+          ESP_LOGD("change_baud_rate", "Changing baud rate from %i to %i",id(my_uart).get_baud_rate(),
+                   new_baud_rate);
+          if (id(my_uart).get_baud_rate() != new_baud_rate) {
+            id(my_uart).set_baud_rate(new_baud_rate);
+            id(my_uart).load_settings();
+          }
+
+uart:
+  id: my_uart
+  rx_pin: $pin_uart_su03_rx
+  baud_rate: 115200
+  data_bits: 8
+  stop_bits: 1
+  debug:
+    direction: BOTH
+    dummy_receiver: true
+    after:
+      delimiter: "0x5A"
+    sequence:
+      - lambda: UARTDebug::log_string(direction, bytes, debug_prefix);
+      - lambda: |-
+          ESP_LOGD("com", "length:%d", sizeof(bytes));
+          
+          // 检查数据长度至少为6字节（包含结束符0x5A）
+          if (bytes.size() >= 6 && bytes[0] == 0x4C && bytes[bytes.size()-1] == 0x5A) {
+            
+            // 唤醒词
+            if (bytes.size() >= 6 && bytes[0]==0x4C && bytes[1]==0x00 && bytes[2]==0x00 && bytes[3]==0x00 && bytes[4]==0x4C) {
+              id(sound_command).publish_state("wake_up");
+              id(sound_command).publish_state("none");
+            }
+            // 打开空调
+            else if (bytes[0]==0x4C && bytes[1]==0x00 && bytes[2]==0x01 && bytes[3]==0x00 && bytes[4]==0x4D) {
+              id(sound_command).publish_state("ac_on");
+              id(sound_command).publish_state("none");
+            }
+            // 关闭空调
+            else if (bytes[0]==0x4C && bytes[1]==0x00 && bytes[2]==0x02 && bytes[3]==0x00 && bytes[4]==0x4E) {
+              id(sound_command).publish_state("ac_off");
+              id(sound_command).publish_state("none");
+            }
+            // 制冷模式 / 打开制冷模式
+            else if (bytes[0]==0x4C && bytes[1]==0x00 && bytes[2]==0x04 && bytes[3]==0x00 && bytes[4]==0x50) {
+              id(sound_command).publish_state("cool_mode");
+              id(sound_command).publish_state("none");
+            }
+            // 加热模式 / 打开加热模式
+            else if (bytes[0]==0x4C && bytes[1]==0x00 && bytes[2]==0x03 && bytes[3]==0x00 && bytes[4]==0x4F) {
+              id(sound_command).publish_state("heat_mode");
+              id(sound_command).publish_state("none");
+            }
+            // 风速调大一点
+            else if (bytes[0]==0x4C && bytes[1]==0x00 && bytes[2]==0x05 && bytes[3]==0x00 && bytes[4]==0x51) {
+              id(sound_command).publish_state("fan_speed_up");
+              id(sound_command).publish_state("none");
+            }
+            // 风速调小一点
+            else if (bytes[0]==0x4C && bytes[1]==0x00 && bytes[2]==0x06 && bytes[3]==0x00 && bytes[4]==0x52) {
+              id(sound_command).publish_state("fan_speed_down");
+              id(sound_command).publish_state("none");
+            }
+            // 打开扫风
+            else if (bytes[0]==0x4C && bytes[1]==0x00 && bytes[2]==0x08 && bytes[3]==0x00 && bytes[4]==0x54) {
+              id(sound_command).publish_state("swing_on");
+              id(sound_command).publish_state("none");
+            }
+            // 关闭扫风
+            else if (bytes[0]==0x4C && bytes[1]==0x00 && bytes[2]==0x09 && bytes[3]==0x00 && bytes[4]==0x55) {
+              id(sound_command).publish_state("swing_off");
+              id(sound_command).publish_state("none");
+            }
+            // 睡眠模式 / 打开睡眠模式
+            else if (bytes[0]==0x4C && bytes[1]==0x00 && bytes[2]==0x0A && bytes[3]==0x00 && bytes[4]==0x56) {
+              id(sound_command).publish_state("sleep_mode");
+              id(sound_command).publish_state("none");
+            }
+            // 温度调节命令（包含具体温度值）
+            else if (bytes[0]==0x4C && bytes[1]==0x00 && bytes[2]==0x0B && bytes[3]==0x01 && bytes.size() >= 7) {
+              uint8_t temp_value = bytes[4];  // 温度十六进制值
+              std::string temp_state;
+              if (temp_value == 0x1E) temp_state = "temperature_30";
+              else if (temp_value == 0x1D) temp_state = "temperature_29";
+              else if (temp_value == 0x1C) temp_state = "temperature_28";
+              else if (temp_value == 0x1B) temp_state = "temperature_27";
+              else if (temp_value == 0x1A) temp_state = "temperature_26";
+              else if (temp_value == 0x19) temp_state = "temperature_25";
+              else if (temp_value == 0x18) temp_state = "temperature_24";
+              else if (temp_value == 0x17) temp_state = "temperature_23";
+              else if (temp_value == 0x16) temp_state = "temperature_22";
+              else if (temp_value == 0x15) temp_state = "temperature_21";
+              else if (temp_value == 0x14) temp_state = "temperature_20";
+              else if (temp_value == 0x13) temp_state = "temperature_19";
+              else if (temp_value == 0x12) temp_state = "temperature_18";
+              else if (temp_value == 0x11) temp_state = "temperature_17";
+              else if (temp_value == 0x10) temp_state = "temperature_16";
+              else temp_state = "temperature_set";
+              
+              id(sound_command).publish_state(temp_state);
+              id(sound_command).publish_state("none");
+            }
+            // 匹配遥控器
+            else if (bytes[0]==0x4C && bytes[1]==0x00 && bytes[2]==0x0C && bytes[3]==0x00 && bytes[4]==0x58) {
+              id(sound_command).publish_state("match_remote");
+              id(sound_command).publish_state("none");
+            }
+            // 启用闹钟
+            else if (bytes[0]==0x4C && bytes[1]==0x00 && bytes[2]==0x0E && bytes[3]==0x00 && bytes[4]==0x5A) {
+              id(sound_command).publish_state("alarm_on");
+              id(sound_command).publish_state("none");
+            }
+            // 关闭闹钟
+            else if (bytes[0]==0x4C && bytes[1]==0x00 && bytes[2]==0x0F && bytes[3]==0x00 && bytes[4]==0x5B) {
+              id(sound_command).publish_state("alarm_off");
+              id(sound_command).publish_state("none");
+            }
+            // 打开声音 / 关闭静音模式
+            else if (bytes[0]==0x4C && bytes[1]==0x00 && bytes[2]==0x10 && bytes[3]==0x00 && bytes[4]==0x5C) {
+              id(sound_command).publish_state("sound_on");
+              id(sound_command).publish_state("none");
+            }
+            // 关闭声音 / 打开静音模式
+            else if (bytes[0]==0x4C && bytes[1]==0x00 && bytes[2]==0x11 && bytes[3]==0x00 && bytes[4]==0x5D) {
+              id(sound_command).publish_state("sound_off");
+              id(sound_command).publish_state("none");
+            }
+            // 温度调高一点
+            else if (bytes[0]==0x4C && bytes[1]==0x00 && bytes[2]==0x12 && bytes[3]==0x00 && bytes[4]==0x5E) {
+              id(sound_command).publish_state("temperature_up");
+              id(sound_command).publish_state("none");
+            }
+            // 温度调低一点
+            else if (bytes[0]==0x4C && bytes[1]==0x00 && bytes[2]==0x13 && bytes[3]==0x00 && bytes[4]==0x5F) {
+              id(sound_command).publish_state("temperature_down");
+              id(sound_command).publish_state("none");
+            }
+            // 音量大一点
+            else if (bytes[0]==0x4C && bytes[1]==0x00 && bytes[2]==0x14 && bytes[3]==0x00 && bytes[4]==0x60) {
+              id(sound_command).publish_state("volume_up");
+              id(sound_command).publish_state("none");
+            }
+            // 音量小一点
+            else if (bytes[0]==0x4C && bytes[1]==0x00 && bytes[2]==0x15 && bytes[3]==0x00 && bytes[4]==0x61) {
+              id(sound_command).publish_state("volume_down");
+              id(sound_command).publish_state("none");
+            }
+          }

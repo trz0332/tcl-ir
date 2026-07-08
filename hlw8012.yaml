@@ -1,0 +1,60 @@
+
+substitutions:
+  pin_sel_pin:  GPIO23  #外部拉高
+  pin_cf_pin:  GPIO15  #外部拉高
+  pin_cf1_pin:  GPIO13  #外部拉高
+
+  voltage_divider: "2101.0905511811025"
+  current_resistor: "0.001"
+  current_multiply: "1.0"
+#,"power_sensor":"binary_sensor.tcl_ir_497f3c_power_status"
+sensor:
+  - platform: hlw8012
+    current_resistor: ${current_resistor}
+    voltage_divider: ${voltage_divider}
+    sel_pin:
+      number: $pin_sel_pin
+      inverted: false
+    cf_pin: $pin_cf_pin
+    cf1_pin: $pin_cf1_pin
+    current:
+      name: "Current"
+      filters:
+        - multiply: ${current_multiply}
+    voltage:
+      name: "Voltage"
+    power:
+      name: "Power"
+      id: power_sensor
+      filters:
+        - lambda: |-    
+            if (x >id(_power_set).state){
+                id(Power_Status).publish_state(true);
+              }
+            else{
+              id(Power_Status).publish_state(false);
+            }
+            return x;
+          
+    energy:
+      name: "Energy"
+    update_interval: 10s
+
+
+number:
+  - platform: template
+    name: "power_set"
+    id: "_power_set"
+    optimistic: true
+    min_value: 0
+    max_value: 30
+    initial_value: 10
+    restore_value: true
+    step: 1  
+
+binary_sensor:
+  - platform: template
+    name: "Power_Status"
+    device_class: power  # 可选：设置设备类型
+    icon: "mdi:flash"   # 可选：设置图标
+    id: Power_Status

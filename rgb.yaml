@@ -1,0 +1,72 @@
+
+substitutions:
+  pin_r:  GPIO19  #外部拉高
+  pin_g:  GPIO18  #外部拉高
+  pin_b:  GPIO5  #外部拉高
+
+
+output:
+  - platform: ledc
+    id: output_component1
+    pin: $pin_r
+    inverted: false
+    min_power: 0.00
+    max_power: 0.5
+  - platform: ledc
+    pin: $pin_g
+    id: output_component2
+    inverted: false
+    min_power: 0.00
+    max_power: 0.5
+  - platform: ledc
+    id: output_component3
+    pin: $pin_b
+    inverted: false
+    min_power: 0.00
+    max_power: 0.5
+
+
+light:
+  - platform: rgb
+    name: "Light"
+    id: "light1"
+    red: output_component1
+    green: output_component2
+    blue: output_component3
+    effects:
+      - strobe:
+          name: Strobe_Effect1
+          colors:
+            - state: true
+              brightness: 100%
+              transition_length: 500ms
+              red: 100%
+              green: 0%
+              blue: 0%
+              duration: 500ms
+            #- state: false
+            #  duration: 250ms
+            - state: true
+              brightness: 100%
+              red: 0%
+              green: 100%
+              blue: 0%
+              transition_length: 500ms
+              duration: 500ms
+      - strobe:
+          name: Strobe_Effect2
+          colors:
+            - state: true
+              brightness: 100%
+              transition_length: 1000ms
+              red: 100%
+              green: 100%
+              blue: 0%
+              duration: 1000ms
+            - state: true
+              brightness: 100%
+              red: 0%
+              green: 100%
+              blue: 0%
+              transition_length: 1000ms
+              duration: 1000ms

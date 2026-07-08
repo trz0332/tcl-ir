@@ -1,0 +1,220 @@
+
+
+
+
+substitutions:
+  mqtt_server_1: !secret mqtt_server_
+  mqtt_port_1: !secret mqtt_port_
+  mqtt_user_1: !secret mqtt_user_
+  mqtt_password_1: !secret mqtt_password_
+  mqtt_prefix_1: !secret mqtt_prefix_
+  mqtt_devid_1: !secret mqtt_devid_
+  sun_latitude_1: !secret latitude_
+  sun_longitude_1 : !secret longitude_
+
+globals:
+  - id: g_devname
+    type:  std::string
+    initial_value: '"$device_name"'
+    restore_value: true
+  - id: g_address
+    type:  std::string
+    initial_value: '"$mqtt_server_1"'
+    restore_value: true
+
+
+  - id: g_port
+    type: int
+    initial_value: '$mqtt_port_1'
+    restore_value: false
+
+  - id: g_username
+    type:  std::string
+    initial_value: '"$mqtt_user_1"'
+    restore_value: false
+
+  - id: g_password
+    type:  std::string
+    initial_value: '"$mqtt_password_1"'
+    restore_value: false
+
+  - id: g_prefix
+    type:  std::string
+    initial_value: '"$mqtt_prefix_1"'
+    restore_value: true
+
+  - id: g_devid
+    type:  std::string
+    initial_value: '"$mqtt_devid_1"'
+    restore_value: true
+
+  - id: g_sun_latitude
+    type:  float
+    initial_value: '$sun_latitude_1'   
+    restore_value: true
+
+  - id: g_sun_longitude
+    type:  float
+    initial_value: '$sun_longitude_1'
+    restore_value: true
+
+    
+mqtt:
+  id: mqtt_client
+  broker: !secret mqtt_server_
+  port: !secret mqtt_port_
+  username: !secret mqtt_user_
+  password: !secret mqtt_password_
+  discovery_prefix: !secret mqtt_prefix_
+  discovery_object_id_generator: device_name
+  discovery_unique_id_generator: mac
+  discovery: true
+  reboot_timeout: !secret mqtt_reboot_timeout
+
+  on_connect:
+    - binary_sensor.template.publish:
+        id: mqttconnect
+        state: ON
+  on_disconnect:
+    - binary_sensor.template.publish:
+        id: mqttconnect
+        state: OFF 
+
+binary_sensor:  
+  - platform: template
+    name: "mqttconnect"
+    id: mqttconnect
+    internal: True #是否对外隐藏（true/false）
+
+select:
+  - platform: template
+    name: "config_select"
+    id: "button_select"
+    optimistic: true
+    options:
+      - mqtt服务器
+      - mqtt端口
+      - mqtt用户名
+      - mqtt密码
+      - mqtt发现前缀
+      - mqtt后缀
+      - 经度
+      - 纬度
+    on_value:
+      then:
+        - lambda: |-
+            ESP_LOGE("ble_adv", "  address: %d", i);
+            switch(i)
+                {
+                case 0:{
+                  id(configshow).make_call().set_value(id(g_address)).perform();
+                      break;
+                    }
+                case 1:{
+                  id(configshow).make_call().set_value(std::to_string(id(g_port))).perform();
+                      break;
+                    }
+                case 2:{
+                  id(configshow).make_call().set_value(id(g_username)).perform();
+                      break;
+                    }
+                case 3:{
+                  id(configshow).make_call().set_value(id(g_password)).perform();
+                      break;
+                    }
+                case 4:{
+                  id(configshow).make_call().set_value(id(g_prefix)).perform();
+                      break;
+                    }
+                case 5:{
+                  id(configshow).make_call().set_value(id(g_devid)).perform();
+                      break;
+                    }
+                case 6:{
+                  id(configshow).make_call().set_value(std::to_string(id(g_sun_longitude))).perform();
+                      break;
+                    }
+                case 7:{
+                  id(configshow).make_call().set_value(std::to_string(id(g_sun_latitude))).perform();
+                      break;
+                    }
+                default :{
+                  break;
+                }
+                }
+
+
+button:
+  - platform: factory_reset
+    name: "Reset"
+  - platform: restart
+    name: "Restart"
+  - platform: template
+    name: "configsave"
+    id: "saveconfig"
+    internal: false
+    disabled_by_default: false
+    discovery: true
+    on_press:
+      then:
+        lambda: |-
+            auto index = id(button_select).active_index();
+            switch(index.value())
+              {
+              case 0:{
+                id(g_address)=id(configshow).state.c_str();
+                ESP_LOGE("ble_adv", "  mqttserver: %s", id(g_address).c_str());
+                break;
+                  }
+              case 1:{
+                id(g_port)=std::stoi(id(configshow).state.c_str());
+                ESP_LOGE("ble_adv", "  mqttport: %d", id(g_port));
+                break;
+                  }
+              case 2:{
+                id(g_username)=id(configshow).state.c_str();
+                ESP_LOGE("ble_adv", "  mqttuser: %s", id(g_username).c_str());
+                break;
+                  }
+              case 3:{
+                id(g_password)=id(configshow).state.c_str();
+                ESP_LOGE("ble_adv", "  mqttpassword: %s", id(g_password).c_str());
+                break;
+                  }
+              case 4:{
+                id(g_prefix)=id(configshow).state.c_str();
+                ESP_LOGE("ble_adv", "  mqtt_prefix: %s", id(g_prefix).c_str());
+                break;
+                  }
+              case 5:{
+                id(g_devid)=id(configshow).state.c_str();
+                ESP_LOGE("ble_adv", "  app_name: %s", id(g_devid).c_str());
+                break;
+                  }
+              case 6:{
+                id(g_sun_longitude)=std::stof(id(configshow).state.c_str());
+                ESP_LOGE("ble_adv", "  mqtt_prefix: %s", id(g_prefix).c_str());
+                break;
+                  }
+              case 7:{
+                id(g_sun_latitude)=std::stof(id(configshow).state.c_str());
+                ESP_LOGE("ble_adv", "  mqtt_prefix: %s", id(g_prefix).c_str());
+                break;
+                  }
+                default :{
+                  break;
+                }
+              }
+
+
+
+text:
+   ############设置一个设备ID，用于espnow控制
+  - platform: template
+    name: "configshow"
+    id: 'configshow'
+    optimistic: true
+    min_length: 0
+    max_length: 100
+    mode: text
+    disabled_by_default: false

@@ -1,0 +1,101 @@
+
+
+globals:
+  - id: txv
+    type: std::vector<long int>
+    restore_value: false
+substitutions:
+  gpio_ir_t: GPIO26
+  gpio_ir_r: GPIO27
+
+mqtt:
+  on_message:
+    - topic: "/ir_send"
+      then:
+      - logger.log: MQTT is connected!
+      - remote_transmitter.transmit_raw:
+          carrier_frequency: 38kHz
+          code: !lambda |-
+            std::string txstr = x;
+            std::vector<long int> txv;
+            if (!txstr.empty()) {
+              txstr = txstr.substr(1);  
+              }
+            if (!txstr.empty()) {
+              txstr = txstr.substr(0, txstr.size() - 1);  
+              }
+              txstr.erase(std::remove_if(txstr.begin(), txstr.end(), [](char c) { return std::isspace(c); }), txstr.end());
+  
+            char * token;
+            char seps[] = ",";
+            token = strtok (&txstr[0],seps);
+            while (token != NULL)
+            {
+              txv.push_back( atoi(token) );
+              token = strtok (NULL, seps);
+            }
+            for (int i = 0; i < txv.size(); i++) {
+              if (i % 2 == 1) {  // 如果是偶数位
+                txv[i] = -txv[i];  // 在偶数位的数据前面加上负号
+              }
+            }
+            return txv;
+remote_transmitter:
+  pin:
+    number: $gpio_ir_t
+    inverted: true
+  carrier_duty_percent: 50%
+  id: ir_tx
+
+
+
+remote_receiver:
+  pin:
+      number: $gpio_ir_r
+      inverted: true
+      mode:
+        input: true
+        pullup: true
+  #pin:
+  #  number: $gpio_ir_r
+  #  inverted: true
+  dump: all
+  id: ir_rx
+  rmt_symbols: 64
+  on_raw:
+    then:
+    - mqtt.publish:
+        topic:  tcl_ir/receive
+        payload: !lambda |-
+          std::vector<long int> rxv = x;
+          std::string rxstr;
+          for (size_t i = 0; i < rxv.size(); i++) {
+            rxstr.append(to_string(rxv[i]));
+            if (i < (rxv.size()-1)) {
+              rxstr.append(",");
+            }
+          }
+          return rxstr;
+
+infrared:
+  - platform: ir_rf_proxy
+    name: IR Transmitter
+    remote_transmitter_id: ir_tx
+  - platform: ir_rf_proxy
+    name: IR Receiver
+    receiver_frequency: 38kHz
+    remote_receiver_id: ir_rx
+
+
+button:        
+  - platform: template
+    name: "irsend"
+    id: "irsend"
+    internal: true
+    on_press:
+      then:
+        - remote_transmitter.transmit_raw:
+            carrier_frequency: 38kHz
+            code: !lambda |-
+                    return id(txv);
+

@@ -1,0 +1,222 @@
+blueprint:
+  name: TCL IR Remote to Midea AC Control
+  description: 监听 TCL 红外遥控器指令并控制美的空调（一比一转换 Node-RED 自动化）
+  domain: automation
+  input:
+    tcl_ir_sensor:
+      name: TCL IR 声音指令传感器
+      description: 用于接收遥控器指令的传感器实体
+      selector:
+        entity:
+          domain: sensor
+    target_climate:
+      name: 目标空调
+      description: 需要控制的美的空调实体
+      selector:
+        entity:
+          domain: climate
+
+mode: single
+max_exceeded: silent
+
+variables:
+  climate_entity: !input target_climate
+
+trigger:
+  - platform: state
+    entity_id: !input tcl_ir_sensor
+
+variables:
+  climate_entity: !input target_climate
+
+condition: []
+action:
+  - choose:
+      # 1. ac_on -> climate.turn_on
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.to_state.state == 'ac_on' }}"
+        sequence:
+          - service: climate.turn_on
+            target:
+              entity_id: !input target_climate
+
+      # 2. ac_off -> climate.turn_off
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.to_state.state == 'ac_off' }}"
+        sequence:
+          - service: climate.turn_off
+            target:
+              entity_id: !input target_climate
+
+      # 3. cool_mode -> 如果当前空调状态是 off 则设置为 cool 模式
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.to_state.state == 'cool_mode' }}"
+        sequence:
+          - condition: not
+            conditions:
+              - condition: state
+                entity_id: !input target_climate
+                state: "off"
+          - service: climate.set_hvac_mode
+            target:
+              entity_id: !input target_climate
+            data:
+              hvac_mode: cool
+      # 4. heat_mode -> 如果当前空调状态是 off 则设置为 heat 模式
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.to_state.state == 'heat_mode' }}"
+        sequence:
+          - condition: not
+            conditions:
+              - condition: state
+                entity_id: !input target_climate
+                state: "off"
+          - service: climate.set_hvac_mode
+            target:
+              entity_id: !input target_climate
+            data:
+              hvac_mode: heat
+
+      # 5. 温度设置指令 (temperature_XX) - 自动提取数字
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.to_state.state.startswith('temperature_') and trigger.to_state.state != 'temperature_up' and trigger.to_state.state != 'temperature_down' }}"
+        sequence:
+          - condition: not
+            conditions:
+              - condition: state
+                entity_id: !input target_climate
+                state: "off"
+          - service: climate.set_temperature
+            target:
+              entity_id: !input target_climate
+            data:
+              temperature: "{{ trigger.to_state.state.split('_')[1] | int }}"
+
+      # 6. temperature_up - 温度升高 1 度
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.to_state.state == 'temperature_up' }}"
+        sequence:
+          - condition: not
+            conditions:
+              - condition: state
+                entity_id: !input target_climate
+                state: "off"
+          - service: climate.set_temperature
+            target:
+              entity_id: !input target_climate
+            data:
+              temperature: "{{ state_attr('climate.mei_de', 'temperature') | float + 1 }}"
+
+      # 7. temperature_down - 温度降低 1 度
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.to_state.state == 'temperature_down' }}"
+        sequence:
+          - condition: not
+            conditions:
+              - condition: state
+                entity_id: !input target_climate
+                state: "off"
+          - service: climate.set_temperature
+            target:
+              entity_id: !input target_climate
+            data:
+              temperature: "{{ state_attr('climate.mei_de', 'temperature') | float - 1 }}"
+
+      # 8. fan_speed_up - 原 Node-RED 无对应服务，不做任何操作
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.to_state.state == 'fan_speed_up' }}"
+        sequence:
+          - condition: not
+            conditions:
+              - condition: state
+                entity_id: !input target_climate
+                state: "off"
+          - variables:
+              current_fan: "{{ state_attr(climate_entity, 'fan_mode') }}"
+              fan_list: ["auto", "low", "medium", "high"]
+              current_index: "{{ fan_list.index(current_fan) if current_fan in fan_list else 0 }}"
+              new_fan: >
+                {% set idx = current_index + 1 %}
+                {% if idx >= fan_list | length %}
+                  {{ fan_list[-1] }}
+                {% else %}
+                  {{ fan_list[idx] }}
+                {% endif %}
+          - service: climate.set_fan_mode
+            target:
+              entity_id: "{{ climate_entity }}"
+            data:
+              fan_mode: "{{ new_fan }}"
+      # 9. fan_speed_down - 原 Node-RED 无对应服务，不做任何操作
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.to_state.state == 'fan_speed_down' }}"
+        sequence:
+          - condition: not
+            conditions:
+              - condition: state
+                entity_id: !input target_climate
+                state: "off"
+          - variables:
+              current_fan: "{{ state_attr(climate_entity, 'fan_mode') }}"
+              fan_list: ["auto", "low", "medium", "high"]
+              current_index: "{{ fan_list.index(current_fan) if current_fan in fan_list else fan_list | length - 1 }}"
+              new_fan: >
+                {% set idx = current_index - 1 %}
+                {% if idx < 0 %}
+                  {{ fan_list[0] }}
+                {% else %}
+                  {{ fan_list[idx] }}
+                {% endif %}
+          - service: climate.set_fan_mode
+            target:
+              entity_id: "{{ climate_entity }}"
+            data:
+              fan_mode: "{{ new_fan }}"
+
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.to_state.state == 'swing_on' }}"
+        sequence:
+          - condition: not
+            conditions:
+              - condition: state
+                entity_id: !input target_climate
+                state: "off"
+          - service: climate.set_swing_mode
+            target:
+              entity_id: !input target_climate
+            data:
+              swing_mode: "horizontal"
+
+      # 11. swing_off - 关闭摆风
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.to_state.state == 'swing_off' }}"
+        sequence:
+          - condition: not
+            conditions:
+              - condition: state
+                entity_id: !input target_climate
+                state: "off"
+          - service: climate.set_swing_mode
+            target:
+              entity_id: !input target_climate
+            data:
+              swing_mode: "off"
+      # 12. sleep_mode - 原 Node-RED 无对应服务，不做任何操作
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.to_state.state == 'sleep_mode' }}"
+        sequence:
+          - delay: 0
+
+    default: []
