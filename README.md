@@ -10,5 +10,6 @@
 2、硬件改造：  
 设备默认使用了一枚内置的红外代码芯片，由于我们要改造硬件，需要使用homeassistant的红外组件来控制，所以不需要这枚内置的红外芯片了，所有红外代码库都将使用homeassistant的smartAC红外组件  
 
-[images/hard.jpg]
 
+
+![硬件改造](images/hard.jpg)
