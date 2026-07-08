@@ -1,4 +1,4 @@
-<img width="3072" height="4550" alt="hard" src="https://github.com/user-attachments/assets/7e34fd0c-1b23-4b51-9aa4-ea29b16f2d61" />
+
 # tcl-ir
 ####TCLwifi遥控器改造  
 必要说明：  
