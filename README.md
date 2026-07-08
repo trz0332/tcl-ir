@@ -1,4 +1,4 @@
-
+<img width="3072" height="4550" alt="hard" src="https://github.com/user-attachments/assets/7e34fd0c-1b23-4b51-9aa4-ea29b16f2d61" />
 # tcl-ir
 ####TCLwifi遥控器改造  
 必要说明：  
@@ -14,8 +14,9 @@
 先要弄掉一个电阻，其实电阻让红外接收断开。然后从电阻一个焊点上飞线到esp32上面，其实这个地方也可以不飞，因为固件里面的红外接受有问题，感觉解码出来的红外代码不对  
 然后就是从红外芯片的焊盘上面飞一根线到esp32芯片上面这个是红外发送
 
+<img width="3072" height="4550" alt="hard" src="https://github.com/user-attachments/assets/5f9b8f29-15c2-429a-a0a8-2f815c6de8fc" />
 
-![硬件改造](images/hard.jpg)
+
 
 
 3、固件编译  
@@ -24,7 +25,9 @@
 4、刷机  
 按照这个图接线，只需要把ttl线接到3V3,GND,ESPTX,ESPRX这4个脚，上电的时候GPIO0接地，就能进入到刷机模式，  
 这个图片上的大部分gpio编号我已经量出来了  
-![硬件改造](images/tcl.png)
+
+<img width="1152" height="648" alt="tcl" src="https://github.com/user-attachments/assets/2ab41d85-42b2-4002-957a-7a403eb6e698" />
+
 
 5、连接homeassistant  
 网页登陆esphome之后，设置mqtt参数，重启，就能在homeassistant里面自动发现设备了  
