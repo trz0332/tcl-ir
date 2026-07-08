@@ -21,6 +21,7 @@
 
 # # # 3、固件编译  
 修改secrets.yaml，把里面的密码参数，wifi参数修改位自己的。然后编译main.yaml这个配置文件  
+怎么安装esphome我就不说了，自己想办法。  
 
 # # # 4、刷机  
 按照这个图接线，只需要把ttl线接到3V3,GND,ESPTX,ESPRX这4个脚，上电的时候GPIO0接地，就能进入到刷机模式，  
@@ -31,6 +32,7 @@
 
 # # # 5、连接homeassistant  
 网页登陆esphome之后，设置mqtt参数，重启，就能在homeassistant里面自动发现设备了  
+<img width="1034" height="894" alt="b9925ca3-90e0-49af-9feb-77f96f998df5" src="https://github.com/user-attachments/assets/123f8d64-502b-4acb-875f-bae087e5b906" />
 
 # # # 6、添加空调设备  
 将smartac.zip里面的文件夹解压到homeassistant配置目录的custom_components目录下面，大概就是如下的目录结构，复制过去之后重启hass  
